@@ -12,7 +12,7 @@ const app = express();
 if (process.env.NODE_ENV === "development") {
   app.use(
     cors({
-      origin: "http://192.168.1.7:8080",
+      origin: "http://192.168.1.4:8080",
       credentials: true,
     })
   );

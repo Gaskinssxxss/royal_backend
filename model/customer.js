@@ -12,6 +12,11 @@ const customer = new Schema({
     ref: "House",
     required: true,
   },
+  id_user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
   verifikasi_data: {
     type: Boolean,
     required: true,

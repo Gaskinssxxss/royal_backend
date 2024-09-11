@@ -3,12 +3,13 @@ const User = require("../model/user");
 const Blok = require("../model/blok");
 const House = require("../model/house");
 const Customer = require("../model/customer");
+const Ticket = require("../model/openTicket");
 const jwt = require("jsonwebtoken");
 const { SECRET, MAX_AGE } = require("../consts");
 const { requireLogin } = require("../middleware/authentication");
 const multer = require("multer");
 const crypto = require("crypto");
-
+const bcrypt = require("bcrypt");
 const router = Router();
 
 const createJwt = (payload) => {
@@ -42,10 +43,151 @@ const encryptData = (data) => {
 
 const upload = multer({ storage: storage });
 
+// Ticket Spezz
+// Create Ticket
+router.post("/ticket", async (req, res) => {
+  const { ticket_header, ticket_contain } = req.body;
+
+  try {
+    const ticket = new Ticket({
+      ticket_header,
+      ticket_contain,
+    });
+    await ticket.save();
+
+    res
+      .status(201)
+      .json({ message: "Ticket created successfully", data: ticket });
+  } catch (error) {
+    res
+      .status(400)
+      .json({ message: "Failed to create ticket", error: error.message });
+  }
+});
+
+// Get all Tickets
+router.get("/tickets", async (req, res) => {
+  try {
+    const tickets = await Ticket.find()
+      .populate("ticket_header.id_user", "username email")
+      .populate("ticket_header.id_customer", "data_pribadi.namaLengkap");
+
+    res
+      .status(200)
+      .json({ message: "Tickets retrieved successfully", data: tickets });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error retrieving tickets", error: error.message });
+  }
+});
+
+// Get single Ticket by ID
+router.get("/ticket/:id", async (req, res) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id)
+      .populate("ticket_header.id_user", "username email")
+      .populate("ticket_header.id_customer", "data_pribadi.namaLengkap");
+
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    res
+      .status(200)
+      .json({ message: "Ticket retrieved successfully", data: ticket });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error retrieving ticket", error: error.message });
+  }
+});
+
+// Update Ticket
+router.put("/ticket/:id", async (req, res) => {
+  const { ticket_header, ticket_contain, ticket_status } = req.body;
+
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    ticket.ticket_header = ticket_header || ticket.ticket_header;
+    ticket.ticket_contain = ticket_contain || ticket.ticket_contain;
+    ticket.ticket_status =
+      ticket_status !== undefined ? ticket_status : ticket.ticket_status;
+
+    await ticket.save();
+
+    res
+      .status(200)
+      .json({ message: "Ticket updated successfully", data: ticket });
+  } catch (error) {
+    res
+      .status(400)
+      .json({ message: "Failed to update ticket", error: error.message });
+  }
+});
+
+// Delete Ticket
+router.delete("/ticket/:id", async (req, res) => {
+  try {
+    const ticket = await Ticket.findByIdAndDelete(req.params.id);
+
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    res.status(200).json({ message: "Ticket deleted successfully" });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to delete ticket", error: error.message });
+  }
+});
+
+// Search Spez
+router.get("/search-customer", async (req, res) => {
+  const { blokname } = req.query;
+
+  if (!blokname) {
+    return res.status(400).json({ message: "blokname is required" });
+  }
+
+  try {
+    const blok = await Blok.findOne({ blokname });
+
+    if (!blok) {
+      return res.status(404).json({ message: "Blok not found" });
+    }
+
+    const customers = await Customer.find({ id_blok: blok._id })
+      .populate("id_blok", "blokname")
+      .populate("id_rumah", "no_rumah type_rumah");
+
+    if (customers.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "No customers found for this blok" });
+    }
+
+    res.status(200).json({ message: "Customers found", data: customers });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error searching customers", error: error.message });
+  }
+});
+
+// Customer Spezz
+
 router.get("/customer", (req, res) => {
   Customer.find()
     .populate("id_blok")
     .populate("id_rumah")
+    .populate("id_user", "username")
     .then((customers) => {
       res.status(200).json({ message: "success", data: customers });
     })
@@ -58,6 +200,7 @@ router.get("/customer/:id", (req, res) => {
   Customer.findById(req.params.id)
     .populate("id_blok")
     .populate("id_rumah")
+    .populate("id_user", "username")
     .then((customer) => {
       if (!customer) {
         return res.status(404).json({ message: "Customer not found" });
@@ -71,17 +214,15 @@ router.get("/customer/:id", (req, res) => {
 
 router.get("/unverified-customers", async (req, res) => {
   try {
-    // Find customers where 'verifikasi_data' is false and populate related fields
     const unverifiedCustomers = await Customer.find({ verifikasi_data: false })
-      .populate("id_blok", "blokname") // Populate id_blok to get blokname
-      .populate("id_rumah", "no_rumah type_rumah"); // Populate id_rumah to get no_rumah and type_rumah
+      .populate("id_blok", "blokname")
+      .populate("id_rumah", "no_rumah type_rumah")
+      .populate("id_user", "username");
 
-    // If no data found
     if (unverifiedCustomers.length === 0) {
       return res.status(404).json({ message: "No unverified customers found" });
     }
 
-    // Send the data to the client
     res.status(200).json({
       message: "Unverified customers retrieved successfully",
       data: unverifiedCustomers,
@@ -96,17 +237,15 @@ router.get("/unverified-customers", async (req, res) => {
 
 router.get("/verified-customers", async (req, res) => {
   try {
-    // Find customers where 'verifikasi_data' is false and populate related fields
     const verifiedCustomers = await Customer.find({ verifikasi_data: true })
-      .populate("id_blok", "blokname") // Populate id_blok to get blokname
-      .populate("id_rumah", "no_rumah type_rumah"); // Populate id_rumah to get no_rumah and type_rumah
+      .populate("id_blok", "blokname")
+      .populate("id_rumah", "no_rumah type_rumah status_rumah")
+      .populate("id_user", "username");
 
-    // If no data found
     if (verifiedCustomers.length === 0) {
       return res.status(404).json({ message: "No unverified customers found" });
     }
 
-    // Send the data to the client
     res.status(200).json({
       message: "Unverified customers retrieved successfully",
       data: verifiedCustomers,
@@ -121,6 +260,7 @@ router.get("/verified-customers", async (req, res) => {
 
 router.post(
   "/customer",
+  requireLogin,
   upload.fields([
     { name: "ktp", maxCount: 1 },
     { name: "npwp", maxCount: 1 },
@@ -129,13 +269,18 @@ router.post(
     { name: "buku_nikah", maxCount: 1 },
     { name: "pas_foto", maxCount: 1 },
   ]),
-  (req, res) => {
+  async (req, res) => {
     try {
+      const token = req.cookies.auth;
+      const decodedToken = jwt.verify(token, SECRET);
+      const id_user = decodedToken.payload;
+
       const customerData = {
         ...req.body,
         kavling: JSON.parse(req.body.kavling),
         data_pribadi: JSON.parse(req.body.data_pribadi),
         pekerjaan: JSON.parse(req.body.pekerjaan),
+        id_user: id_user,
       };
 
       const customerFiles = {
@@ -152,23 +297,15 @@ router.post(
         customerFile: customerFiles,
       };
 
-      Customer.create(newCustomerData)
-        .then((customer) => {
-          res.status(201).json({
-            message: "Customer created successfully",
-            data: customer,
-          });
-        })
-        .catch((error) => {
-          res.status(400).json({
-            message: "Error creating customer",
-            error,
-          });
-        });
+      const customer = await Customer.create(newCustomerData);
+      res.status(201).json({
+        message: "Customer created successfully",
+        data: customer,
+      });
     } catch (error) {
       res.status(400).json({
         message: "Error parsing customer data",
-        error,
+        error: error.message,
       });
     }
   }
@@ -214,11 +351,10 @@ router.put(
 
 router.put("/verifikasi/:id", async (req, res) => {
   try {
-    // Get the customer by ID and update 'verifikasi_data' to true
     const updatedCustomer = await Customer.findByIdAndUpdate(
-      req.params.id, // The ID of the customer to update
-      { verifikasi_data: true }, // The update to apply
-      { new: true } // Return the updated document
+      req.params.id,
+      { verifikasi_data: true },
+      { new: true }
     );
 
     if (!updatedCustomer) {
@@ -239,11 +375,10 @@ router.put("/verifikasi/:id", async (req, res) => {
 
 router.put("/verifikasi/batal/:id", async (req, res) => {
   try {
-    // Get the customer by ID and update 'verifikasi_data' to true
     const updatedCustomer = await Customer.findByIdAndUpdate(
-      req.params.id, // The ID of the customer to update
-      { verifikasi_data: false }, // The update to apply
-      { new: true } // Return the updated document
+      req.params.id,
+      { verifikasi_data: false },
+      { new: true }
     );
 
     if (!updatedCustomer) {
@@ -262,12 +397,37 @@ router.put("/verifikasi/batal/:id", async (req, res) => {
   }
 });
 
+// House Update
+
 router.put("/update-house-status/:id", async (req, res) => {
   try {
-    // Update 'status_rumah' to true in House model
     const updatedHouse = await House.findByIdAndUpdate(
       req.params.id,
       { status_rumah: false },
+      { new: true }
+    );
+
+    if (!updatedHouse) {
+      return res.status(404).json({ message: "House not found" });
+    }
+
+    res.status(200).json({
+      message: "House status updated successfully",
+      house: updatedHouse,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error updating house status",
+      error: error.message,
+    });
+  }
+});
+
+router.put("/deupdate-house-status/:id", async (req, res) => {
+  try {
+    const updatedHouse = await House.findByIdAndUpdate(
+      req.params.id,
+      { status_rumah: true },
       { new: true }
     );
 
@@ -299,66 +459,6 @@ router.delete("/customer/delete/:id", (req, res) => {
       res.status(400).json({ message: "Error deleting customer", error });
     });
 });
-
-// router.post("/customer", (req, res) => {
-//   const customerData = req.body;
-
-//   Customer.create(customerData)
-//     .then((customer) => {
-//       res
-//         .status(201)
-//         .json({ message: "Customer created successfully", data: customer });
-//     })
-//     .catch((error) => {
-//       res.status(400).json({ message: "Error creating customer", error });
-//     });
-// });
-
-// router.get("/customer/:id", (req, res) => {
-//   Customer.findById(req.params.id)
-//     .populate("id_blok")
-//     .populate("id_rumah")
-//     .then((customer) => {
-//       if (!customer) {
-//         return res.status(404).json({ message: "Customer not found" });
-//       }
-//       res.status(200).json({ message: "success", data: customer });
-//     })
-//     .catch((error) => {
-//       res.status(400).json({ message: "Error fetching customer", error });
-//     });
-// });
-
-// router.put("/customer/edit/:id", (req, res) => {
-//   const updatedData = req.body;
-
-//   Customer.findByIdAndUpdate(req.params.id, updatedData, { new: true })
-//     .then((updatedCustomer) => {
-//       if (!updatedCustomer) {
-//         return res.status(404).json({ message: "Customer not found" });
-//       }
-//       res.status(200).json({
-//         message: "Customer updated successfully",
-//         data: updatedCustomer,
-//       });
-//     })
-//     .catch((error) => {
-//       res.status(400).json({ message: "Error updating customer", error });
-//     });
-// });
-
-// router.delete("/customer/delete/:id", (req, res) => {
-//   Customer.findByIdAndDelete(req.params.id)
-//     .then((customer) => {
-//       if (!customer) {
-//         return res.status(404).json({ message: "Customer not found" });
-//       }
-//       res.status(200).json({ message: "Customer deleted successfully" });
-//     })
-//     .catch((error) => {
-//       res.status(400).json({ message: "Error deleting customer", error });
-//     });
-// });
 
 router.get("/blok", (req, res) => {
   Blok.find()
@@ -434,7 +534,7 @@ router.get("/house", (req, res) => {
 });
 
 router.get("/house/:id_rumah", (req, res) => {
-  House.findOne({ id_rumah: req.params.id_rumah }) // Menggunakan id_rumah untuk pencarian
+  House.findOne({ id_rumah: req.params.id_rumah })
     .then((house) => {
       if (!house) {
         return res.status(404).json({ error: "House not found" });
@@ -491,6 +591,83 @@ router.delete("/blok/delete/:id", (req, res) => {
     .catch((error) => res.status(400).json({ message: "error", error }));
 });
 
+router.get("/users/marketing", async (req, res) => {
+  try {
+    const marketingAccounts = await User.find(
+      { role: "marketing" },
+      { username: 1, email: 1, verified: 1, role: 1 }
+    );
+    res.status(200).json({ message: "success", data: marketingAccounts });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error fetching marketing accounts", error });
+  }
+});
+router.put("/users/:id", async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    let user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (username) {
+      user.username = username;
+    }
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      user.password = await bcrypt.hash(password, salt);
+    }
+    await user.save();
+
+    res.status(200).json({ message: "User updated successfully", user });
+  } catch (error) {
+    res.status(500).json({ message: "Error updating user", error });
+  }
+});
+
+router.delete("/users/:id", async (req, res) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.status(200).json({ message: "User deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting user", error });
+  }
+});
+router.put("/users/verify/:id", async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { verified: true },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.status(200).json({ message: "User verified successfully", user });
+  } catch (error) {
+    res.status(500).json({ message: "Error verifying user", error });
+  }
+});
+router.put("/users/unverify/:id", async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { verified: false },
+      { new: false }
+    );
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.status(200).json({ message: "User verified successfully", user });
+  } catch (error) {
+    res.status(500).json({ message: "Error verifying user", error });
+  }
+});
 /**
  * @route POST api/users/register
  * @desc Register new user
@@ -513,23 +690,36 @@ router.post("/users/register", (req, res) => {
  * @desc Login user
  * @access Public
  */
-router.post("/users/login", (req, res) => {
+
+router.post("/users/login", async (req, res) => {
   const { email, password } = req.body;
-  User.findOne({ email: email, password: password })
-    .then((user) => {
-      if (!user) {
-        return res
-          .status(401)
-          .json({ message: "failed", error: "wrong-credentials" });
-      }
-      const maxAge = 3 * 24 * 60 * 60;
-      const token = createJwt(user._id, maxAge);
-      res.cookie("auth", token, { httpOnly: true, maxAge: maxAge * 10 });
-      return res.status(200).json({ message: "success", data: user });
-    })
-    .catch((err) => {
-      return res.status(400).json({ message: "failed", err });
-    });
+  try {
+    const user = await User.findOne({ email: email });
+    if (!user) {
+      return res
+        .status(401)
+        .json({ message: "failed", error: "wrong-credentials" });
+    }
+    if (!user.verified) {
+      return res
+        .status(401)
+        .json({ message: "failed", error: "wrong-credentials" });
+    }
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res
+        .status(401)
+        .json({ message: "failed", error: "wrong-credentials" });
+    }
+
+    const maxAge = 3 * 24 * 60 * 60;
+    const token = createJwt(user._id, maxAge);
+    res.cookie("auth", token, { httpOnly: true, maxAge: maxAge * 1000 });
+    return res.status(200).json({ message: "success", data: user });
+  } catch (err) {
+    return res.status(400).json({ message: "failed", error: err.message });
+  }
 });
 
 /**
@@ -560,6 +750,34 @@ router.get("/users", requireLogin, (req, res) => {
         .status(401)
         .json({ message: "error", code: "unauthenticated-access" });
     });
+});
+
+router.get("/user/history", requireLogin, async (req, res) => {
+  try {
+    const token = req.cookies.auth;
+    const decodedToken = jwt.verify(token, SECRET);
+    const id_user = decodedToken.payload;
+
+    const customers = await Customer.find({ id_user: id_user })
+      .populate("id_blok", "blokname")
+      .populate("id_rumah", "no_rumah type_rumah");
+
+    if (customers.length === 0) {
+      return res.status(404).json({
+        message: "No history found for this user",
+      });
+    }
+
+    res.status(200).json({
+      message: "User history retrieved successfully",
+      data: customers,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error retrieving user history",
+      error: error.message,
+    });
+  }
 });
 
 module.exports = router;

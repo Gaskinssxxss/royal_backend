@@ -23,23 +23,31 @@ const customer = new Schema({
     enum: [true, false],
     default: false,
   },
+  type_pembayaran: {
+    type: String,
+    required: true,
+  },
+  tanggalBooking: {
+    type: Date,
+    default: Date.now,
+  },
   kavling: [
     {
       no_kavling: {
         type: String,
-        required: true,
+        required: false,
       },
       type: {
         type: String,
-        required: true,
+        required: false,
       },
       luas_bangunan: {
         type: String,
-        required: true,
+        required: false,
       },
       luas_tanah: {
         type: String,
-        required: true,
+        required: false,
       },
     },
   ],
@@ -47,51 +55,51 @@ const customer = new Schema({
     {
       namaLengkap: {
         type: String,
-        required: true,
+        required: false,
       },
       tempat_lahir: {
         type: String,
-        required: true,
+        required: false,
       },
       taggal_lahir: {
         type: String,
-        required: true,
+        required: false,
       },
       jenis_kelamin: {
         type: String,
-        required: true,
+        required: false,
       },
       pekerjaan: {
         type: String,
-        required: true,
+        required: false,
       },
       alamat: {
         type: String,
-        required: true,
+        required: false,
       },
       no_identitas: {
         type: String,
-        required: true,
+        required: false,
       },
       no_kontak: {
         type: String,
-        required: true,
+        required: false,
       },
       no_wa: {
         type: String,
-        required: true,
+        required: false,
       },
       email: {
         type: String,
-        required: true,
+        required: false,
       },
       status_tempat_tinggal: {
         type: String,
-        required: true,
+        required: false,
       },
       status_pernikahan: {
         type: String,
-        required: true,
+        required: false,
       },
       npwp: {
         type: String,
@@ -103,47 +111,47 @@ const customer = new Schema({
     {
       jenis_pekerjaan: {
         type: String,
-        required: true,
+        required: false,
       },
       jabatan: {
         type: String,
-        required: true,
+        required: false,
       },
       status_pekerjaan: {
         type: String,
-        required: true,
+        required: false,
       },
       nama_instansi: {
         type: String,
-        required: true,
+        required: false,
       },
       no_telpon_instansi: {
         type: String,
-        required: true,
+        required: false,
       },
       no_fax: {
         type: String,
-        required: true,
+        required: false,
       },
       penghasilan_tetap: {
         type: String,
-        required: true,
+        required: false,
       },
       penghasilan_tambahan: {
         type: String,
-        required: true,
+        required: false,
       },
       pengeluaran_perbulan: {
         type: String,
-        required: true,
+        required: false,
       },
       sumber_penghasilan_tambahan: {
         type: String,
-        required: true,
+        required: false,
       },
       jenis_usaha: {
         type: String,
-        required: true,
+        required: false,
       },
     },
   ],
@@ -151,27 +159,27 @@ const customer = new Schema({
     {
       ktp: {
         type: String,
-        required: true,
+        required: false,
       },
       npwp: {
         type: String,
-        required: true,
+        required: false,
       },
       kk: {
         type: String,
-        required: true,
+        required: false,
       },
       slip_gaji: {
         type: String,
-        required: true,
+        required: false,
       },
       buku_nikah: {
         type: String,
-        required: true,
+        required: false,
       },
       pas_foto: {
         type: String,
-        required: true,
+        required: false,
       },
     },
   ],

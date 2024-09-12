@@ -5,8 +5,81 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const path = require("path");
+const Chat = require("./model/chat");
 
 const app = express();
+
+const http = require("http").createServer(app);
+const io = require("socket.io")(http, {
+  cors: {
+    origin: "http://192.168.1.4:8080",
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
+
+io.on("connection", (socket) => {
+  console.log("A user connected");
+  socket.on("join", async ({ visitorID }) => {
+    let chat = await Chat.findOne({ visitorID });
+
+    if (!chat) {
+      chat = new Chat({ visitorID, messages: [] });
+      await chat.save();
+    }
+
+    socket.join(visitorID);
+    console.log(`Pengunjung dengan ID ${visitorID} terhubung`);
+  });
+
+  socket.on("chatMessage", async (msg) => {
+    const { visitorID, text, sender } = msg;
+
+    const chat = await Chat.findOne({ visitorID });
+
+    if (chat && chat.isActive) {
+      chat.messages.push({ sender, text });
+      await chat.save();
+      console.log("ada Pesan Masuk");
+      io.to(visitorID).emit("chatMessage", { sender, text });
+      io.emit("adminMessage", { visitorID, sender, text });
+    } else {
+      socket.emit("chatClosed", {
+        message: "This chat session has been closed.",
+      });
+    }
+  });
+
+  socket.on("adminReply", async (msg) => {
+    const { visitorID, text } = msg;
+    let chat = await Chat.findOne({ visitorID });
+
+    if (chat && chat.isActive) {
+      chat.messages.push({ sender: "Admin", text });
+      await chat.save();
+
+      io.to(visitorID).emit("chatMessage", { sender: "Admin", text });
+      io.emit("adminMessage", { visitorID, sender: "Admin", text });
+    }
+  });
+
+  socket.on("chatClosed", async ({ visitorID }) => {
+    const chat = await Chat.findOne({ visitorID });
+
+    if (chat && chat.isActive) {
+      chat.isActive = false;
+      await chat.save();
+
+      io.to(visitorID).emit("chatClosed", {
+        message: "This chat session has been closed.",
+      });
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("A user disconnected");
+  });
+});
 
 // Middleware
 if (process.env.NODE_ENV === "development") {
@@ -43,6 +116,6 @@ app.get("*", (req, res) => {
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
+http.listen(port, () => {
   console.log(`Server is listening on port ${port}`);
 });

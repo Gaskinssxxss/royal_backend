@@ -20,10 +20,10 @@ const house = new Schema({
     required: true,
   },
   status_rumah: {
-    type: Boolean,
-    enum: [true, false],
+    type: String,
+    enum: ["kpr", "cash", "terbooking", "deterjual", "terjual"],
     required: true,
-    default: true,
+    default: "deterjual",
   },
 });
 

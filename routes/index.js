@@ -3,7 +3,8 @@ const User = require("../model/user");
 const Blok = require("../model/blok");
 const House = require("../model/house");
 const Customer = require("../model/customer");
-const Ticket = require("../model/openTicket");
+const Keuangan = require("../model/keuangan");
+const Chat = require("../model/chat");
 const jwt = require("jsonwebtoken");
 const { SECRET, MAX_AGE } = require("../consts");
 const { requireLogin } = require("../middleware/authentication");
@@ -43,112 +44,121 @@ const encryptData = (data) => {
 
 const upload = multer({ storage: storage });
 
-// Ticket Spezz
-// Create Ticket
-router.post("/ticket", async (req, res) => {
-  const { ticket_header, ticket_contain } = req.body;
-
+router.get("/chat/:visitorID", async (req, res) => {
   try {
-    const ticket = new Ticket({
-      ticket_header,
-      ticket_contain,
-    });
-    await ticket.save();
+    const { visitorID } = req.params;
+    console.log(`Mencari chat dengan visitorID: ${visitorID}`); // Debugging
 
-    res
-      .status(201)
-      .json({ message: "Ticket created successfully", data: ticket });
-  } catch (error) {
-    res
-      .status(400)
-      .json({ message: "Failed to create ticket", error: error.message });
-  }
-});
+    const chat = await Chat.findOne({ visitorID });
 
-// Get all Tickets
-router.get("/tickets", async (req, res) => {
-  try {
-    const tickets = await Ticket.find()
-      .populate("ticket_header.id_user", "username email")
-      .populate("ticket_header.id_customer", "data_pribadi.namaLengkap");
-
-    res
-      .status(200)
-      .json({ message: "Tickets retrieved successfully", data: tickets });
-  } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error retrieving tickets", error: error.message });
-  }
-});
-
-// Get single Ticket by ID
-router.get("/ticket/:id", async (req, res) => {
-  try {
-    const ticket = await Ticket.findById(req.params.id)
-      .populate("ticket_header.id_user", "username email")
-      .populate("ticket_header.id_customer", "data_pribadi.namaLengkap");
-
-    if (!ticket) {
-      return res.status(404).json({ message: "Ticket not found" });
+    if (!chat) {
+      console.log(`Chat dengan visitorID: ${visitorID} tidak ditemukan.`);
+      return res.status(404).json({ message: "Chat not found" });
     }
 
-    res
-      .status(200)
-      .json({ message: "Ticket retrieved successfully", data: ticket });
+    res.json(chat);
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error retrieving ticket", error: error.message });
+    console.log(
+      `Error saat mencari chat dengan visitorID: ${visitorID}`,
+      error
+    );
+    res.status(500).json({ message: "Server error", error });
   }
 });
 
-// Update Ticket
-router.put("/ticket/:id", async (req, res) => {
-  const { ticket_header, ticket_contain, ticket_status } = req.body;
-
+router.get("/chats/active", async (req, res) => {
   try {
-    const ticket = await Ticket.findById(req.params.id);
+    const activeChats = await Chat.find({ isActive: true });
+    res.json(activeChats);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching active chats", error });
+  }
+});
 
-    if (!ticket) {
-      return res.status(404).json({ message: "Ticket not found" });
+router.post("/chat/:visitorID/close", async (req, res) => {
+  try {
+    const { visitorID } = req.params;
+    const chat = await Chat.findOne({ visitorID });
+
+    if (!chat) {
+      return res.status(404).json({ message: "Chat not found" });
     }
 
-    ticket.ticket_header = ticket_header || ticket.ticket_header;
-    ticket.ticket_contain = ticket_contain || ticket.ticket_contain;
-    ticket.ticket_status =
-      ticket_status !== undefined ? ticket_status : ticket.ticket_status;
+    chat.isActive = false;
+    await chat.save();
 
-    await ticket.save();
-
-    res
-      .status(200)
-      .json({ message: "Ticket updated successfully", data: ticket });
+    res.json({ message: "Chat session closed" });
   } catch (error) {
-    res
-      .status(400)
-      .json({ message: "Failed to update ticket", error: error.message });
+    res.status(500).json({ message: "Server error", error });
   }
 });
 
-// Delete Ticket
-router.delete("/ticket/:id", async (req, res) => {
+// Create a new Keuangan record
+router.post("/keuangan", async (req, res) => {
   try {
-    const ticket = await Ticket.findByIdAndDelete(req.params.id);
-
-    if (!ticket) {
-      return res.status(404).json({ message: "Ticket not found" });
-    }
-
-    res.status(200).json({ message: "Ticket deleted successfully" });
+    const newKeuangan = new Keuangan(req.body);
+    const savedKeuangan = await newKeuangan.save();
+    res.status(201).json(savedKeuangan);
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Failed to delete ticket", error: error.message });
+    res.status(400).json({ error: error.message });
   }
 });
 
-// Search Spez
+// Get all Keuangan records
+router.get("/keuangan", async (req, res) => {
+  try {
+    const keuanganList = await Keuangan.find().populate("id_customer");
+    res.status(200).json(keuanganList);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get a single Keuangan record by ID
+router.get("/keuangan/:id", async (req, res) => {
+  try {
+    const keuangan = await Keuangan.findById(req.params.id).populate(
+      "id_customer"
+    );
+    if (!keuangan) {
+      return res.status(404).json({ message: "Keuangan record not found" });
+    }
+    res.status(200).json(keuangan);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update a Keuangan record by ID
+router.put("/keuangan/:id", async (req, res) => {
+  try {
+    const updatedKeuangan = await Keuangan.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+    if (!updatedKeuangan) {
+      return res.status(404).json({ message: "Keuangan record not found" });
+    }
+    res.status(200).json(updatedKeuangan);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Delete a Keuangan record by ID
+router.delete("/keuangan/:id", async (req, res) => {
+  try {
+    const deletedKeuangan = await Keuangan.findByIdAndDelete(req.params.id);
+    if (!deletedKeuangan) {
+      return res.status(404).json({ message: "Keuangan record not found" });
+    }
+    res.status(200).json({ message: "Keuangan record deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get("/search-customer", async (req, res) => {
   const { blokname } = req.query;
 
@@ -258,6 +268,40 @@ router.get("/verified-customers", async (req, res) => {
   }
 });
 
+router.get("/history/verified-customers/", async (req, res) => {
+  try {
+    const verifiedCustomers = await Customer.find({ verifikasi_data: true })
+      .populate({
+        path: "id_rumah",
+        match: { status_rumah: { $in: ["terjual", "kpr", "cash"] } },
+        select: "no_rumah type_rumah status_rumah",
+      })
+      .populate("id_blok", "blokname")
+      .populate("id_user", "username");
+
+    const filteredCustomers = verifiedCustomers.filter(
+      (customer) => customer.id_rumah !== null
+    );
+
+    if (filteredCustomers.length === 0) {
+      return res.status(404).json({
+        message: "No verified customers found with specified house status",
+      });
+    }
+
+    res.status(200).json({
+      message:
+        "Verified customers with specified house status retrieved successfully",
+      data: filteredCustomers,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error retrieving verified customers",
+      error: error.message,
+    });
+  }
+});
+
 router.post(
   "/customer",
   requireLogin,
@@ -281,6 +325,7 @@ router.post(
         data_pribadi: JSON.parse(req.body.data_pribadi),
         pekerjaan: JSON.parse(req.body.pekerjaan),
         id_user: id_user,
+        type_pembayaran: req.body.type_pembayaran,
       };
 
       const customerFiles = {
@@ -311,40 +356,76 @@ router.post(
   }
 );
 
+// PUT /customer/edit/:id
 router.put(
   "/customer/edit/:id",
-  upload.single("customerFile"),
+  upload.fields([
+    { name: "ktp", maxCount: 1 },
+    { name: "npwp", maxCount: 1 },
+    { name: "kk", maxCount: 1 },
+    { name: "slip_gaji", maxCount: 1 },
+    { name: "buku_nikah", maxCount: 1 },
+    { name: "pas_foto", maxCount: 1 },
+  ]),
   async (req, res) => {
-    const customerId = req.params.id;
-    let customerFile = req.file ? req.file.path : null;
-
-    const updatedData = {
-      ...req.body,
-      customerFile,
-    };
-
     try {
-      const customer = await Customer.findByIdAndUpdate(
-        customerId,
-        updatedData,
-        {
-          new: true,
-        }
-      );
-
+      const customer = await Customer.findById(req.params.id);
       if (!customer) {
-        return res.status(404).json({ message: "Customer not found" });
+        return res.status(404).send({ message: "Customer not found" });
+      }
+      const personalData = req.body.data_pribadi
+        ? JSON.parse(req.body.data_pribadi)
+        : null;
+      const jobData = req.body.pekerjaan
+        ? JSON.parse(req.body.pekerjaan)
+        : null;
+      if (personalData) {
+        customer.data_pribadi[0].namaLengkap =
+          personalData.namaLengkap || customer.data_pribadi[0].namaLengkap;
+        customer.data_pribadi[0].alamat =
+          personalData.alamat || customer.data_pribadi[0].alamat;
+        customer.data_pribadi[0].no_kontak =
+          personalData.no_kontak || customer.data_pribadi[0].no_kontak;
+        customer.data_pribadi[0].no_wa =
+          personalData.no_wa || customer.data_pribadi[0].no_wa;
+        customer.data_pribadi[0].email =
+          personalData.email || customer.data_pribadi[0].email;
       }
 
-      res.status(200).json({
-        message: "Customer updated successfully",
-        customer,
-      });
+      if (jobData) {
+        customer.pekerjaan[0].jenis_pekerjaan =
+          jobData.jenis_pekerjaan || customer.pekerjaan[0].jenis_pekerjaan;
+        customer.pekerjaan[0].jabatan =
+          jobData.jabatan || customer.pekerjaan[0].jabatan;
+        customer.pekerjaan[0].status_pekerjaan =
+          jobData.status_pekerjaan || customer.pekerjaan[0].status_pekerjaan;
+        customer.pekerjaan[0].nama_instansi =
+          jobData.nama_instansi || customer.pekerjaan[0].nama_instansi;
+        customer.pekerjaan[0].no_telpon_instansi =
+          jobData.no_telpon_instansi ||
+          customer.pekerjaan[0].no_telpon_instansi;
+      }
+
+      if (req.files) {
+        if (req.files.ktp) customer.customerFile[0].ktp = req.files.ktp[0].path;
+        if (req.files.npwp)
+          customer.customerFile[0].npwp = req.files.npwp[0].path;
+        if (req.files.kk) customer.customerFile[0].kk = req.files.kk[0].path;
+        if (req.files.slip_gaji)
+          customer.customerFile[0].slip_gaji = req.files.slip_gaji[0].path;
+        if (req.files.buku_nikah)
+          customer.customerFile[0].buku_nikah = req.files.buku_nikah[0].path;
+        if (req.files.pas_foto)
+          customer.customerFile[0].pas_foto = req.files.pas_foto[0].path;
+      }
+
+      await customer.save();
+      res.status(200).send({ message: "Customer updated successfully" });
     } catch (error) {
-      res.status(500).json({
-        message: "Error updating customer",
-        error: error.message,
-      });
+      console.error(error);
+      res
+        .status(500)
+        .send({ message: "Error updating customer: " + error.message });
     }
   }
 );
@@ -401,9 +482,10 @@ router.put("/verifikasi/batal/:id", async (req, res) => {
 
 router.put("/update-house-status/:id", async (req, res) => {
   try {
+    const kondisi = req.body.status_rumah;
     const updatedHouse = await House.findByIdAndUpdate(
       req.params.id,
-      { status_rumah: false },
+      { status_rumah: kondisi },
       { new: true }
     );
 
@@ -425,9 +507,10 @@ router.put("/update-house-status/:id", async (req, res) => {
 
 router.put("/deupdate-house-status/:id", async (req, res) => {
   try {
+    const kondisi = req.body.status_rumah;
     const updatedHouse = await House.findByIdAndUpdate(
       req.params.id,
-      { status_rumah: true },
+      { status_rumah: kondisi },
       { new: true }
     );
 
@@ -589,6 +672,20 @@ router.delete("/blok/delete/:id", (req, res) => {
   Blok.findByIdAndDelete(id)
     .then(() => res.status(200).json({ message: "success" }))
     .catch((error) => res.status(400).json({ message: "error", error }));
+});
+
+router.get("/blocks-and-houses", async (req, res) => {
+  try {
+    const blocks = await Blok.find(); // Fetch all blocks
+    const houses = await House.find().populate("id_blok"); // Fetch all houses and populate blok data
+
+    res.json({
+      blocks,
+      houses,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch blok and house data" });
+  }
 });
 
 router.get("/users/marketing", async (req, res) => {
@@ -760,7 +857,8 @@ router.get("/user/history", requireLogin, async (req, res) => {
 
     const customers = await Customer.find({ id_user: id_user })
       .populate("id_blok", "blokname")
-      .populate("id_rumah", "no_rumah type_rumah");
+      .populate("id_rumah", "no_rumah type_rumah")
+      .populate("id_user", "username");
 
     if (customers.length === 0) {
       return res.status(404).json({

@@ -7,38 +7,46 @@ const keuangan = new Schema({
     ref: "Customer",
     required: true,
   },
-  dp: {
+  nomor_pembayaran: {
     type: String,
     required: true,
   },
-  total: {
-    type: String,
-    required: true,
-  },
-  bunga: {
-    type: String,
-    required: false,
-  },
-  cashBack: {
-    type: String,
-    required: false,
-  },
+  harga_rumah: [
+    {
+      harga: {
+        type: Number,
+        required: true,
+      },
+      bunga: {
+        type: Number,
+        required: true,
+      },
+      cashBack: {
+        type: Number,
+        required: false,
+      },
+      dp: {
+        type: Number,
+        required: true,
+      },
+      jangka_waktu: {
+        type: Date,
+        required: true,
+      },
+    },
+  ],
   kredit: [
     {
       tanggal: {
-        type: String,
+        type: Date,
         required: false,
       },
       saldo: {
-        type: String,
+        type: Number,
         required: false,
       },
     },
   ],
-  jangka_waktu: {
-    type: Date,
-    required: true,
-  },
 });
 
 const Keuangan = mongoose.model("Keuangan", keuangan);

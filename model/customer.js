@@ -17,6 +17,10 @@ const customer = new Schema({
     ref: "User",
     required: true,
   },
+  nomor_str: {
+    type: String,
+    required: true,
+  },
   verifikasi_data: {
     type: Boolean,
     required: true,

@@ -47,7 +47,7 @@ const upload = multer({ storage: storage });
 router.get("/chat/:visitorID", async (req, res) => {
   try {
     const { visitorID } = req.params;
-    console.log(`Mencari chat dengan visitorID: ${visitorID}`); // Debugging
+    console.log(`Mencari chat dengan visitorID: ${visitorID}`);
 
     const chat = await Chat.findOne({ visitorID });
 
@@ -93,28 +93,37 @@ router.post("/chat/:visitorID/close", async (req, res) => {
   }
 });
 
-// Create a new Keuangan record
 router.post("/keuangan", async (req, res) => {
   try {
     const newKeuangan = new Keuangan(req.body);
     const savedKeuangan = await newKeuangan.save();
-    res.status(201).json(savedKeuangan);
+    res.status(201).json({
+      message: "Keuangan record created successfully",
+      data: savedKeuangan,
+    });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    res.status(400).json({
+      message: "Error creating keuangan record",
+      error: error.message,
+    });
   }
 });
 
-// Get all Keuangan records
 router.get("/keuangan", async (req, res) => {
   try {
     const keuanganList = await Keuangan.find().populate("id_customer");
-    res.status(200).json(keuanganList);
+    res.status(200).json({
+      message: "Keuangan records retrieved successfully",
+      data: keuanganList,
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      message: "Error retrieving keuangan records",
+      error: error.message,
+    });
   }
 });
 
-// Get a single Keuangan record by ID
 router.get("/keuangan/:id", async (req, res) => {
   try {
     const keuangan = await Keuangan.findById(req.params.id).populate(
@@ -123,30 +132,61 @@ router.get("/keuangan/:id", async (req, res) => {
     if (!keuangan) {
       return res.status(404).json({ message: "Keuangan record not found" });
     }
-    res.status(200).json(keuangan);
+    res.status(200).json({
+      message: "Keuangan record retrieved successfully",
+      data: keuangan,
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      message: "Error retrieving keuangan record",
+      error: error.message,
+    });
   }
 });
 
-// Update a Keuangan record by ID
+router.get("/keuangan/customer/:id", async (req, res) => {
+  try {
+    const keuanganData = await Keuangan.find({
+      id_customer: req.params.id,
+    }).populate("id_customer");
+
+    if (!keuanganData) {
+      return res.status(404).json({ message: "Data keuangan tidak ditemukan" });
+    }
+
+    res.status(200).json(keuanganData);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Terjadi kesalahan", error: error.message });
+  }
+});
+
 router.put("/keuangan/:id", async (req, res) => {
   try {
     const updatedKeuangan = await Keuangan.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true, runValidators: true }
+      {
+        new: true,
+        runValidators: true,
+      }
     );
     if (!updatedKeuangan) {
       return res.status(404).json({ message: "Keuangan record not found" });
     }
-    res.status(200).json(updatedKeuangan);
+    res.status(200).json({
+      message: "Keuangan record updated successfully",
+      data: updatedKeuangan,
+    });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    res.status(400).json({
+      message: "Error updating keuangan record",
+      error: error.message,
+    });
   }
 });
 
-// Delete a Keuangan record by ID
 router.delete("/keuangan/:id", async (req, res) => {
   try {
     const deletedKeuangan = await Keuangan.findByIdAndDelete(req.params.id);
@@ -155,7 +195,10 @@ router.delete("/keuangan/:id", async (req, res) => {
     }
     res.status(200).json({ message: "Keuangan record deleted successfully" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      message: "Error deleting keuangan record",
+      error: error.message,
+    });
   }
 });
 
@@ -190,8 +233,6 @@ router.get("/search-customer", async (req, res) => {
       .json({ message: "Error searching customers", error: error.message });
   }
 });
-
-// Customer Spezz
 
 router.get("/customer", (req, res) => {
   Customer.find()
@@ -326,6 +367,7 @@ router.post(
         pekerjaan: JSON.parse(req.body.pekerjaan),
         id_user: id_user,
         type_pembayaran: req.body.type_pembayaran,
+        nomor_str: req.body.nomor_str,
       };
 
       const customerFiles = {
@@ -690,15 +732,16 @@ router.get("/blocks-and-houses", async (req, res) => {
 
 router.get("/users/marketing", async (req, res) => {
   try {
-    const marketingAccounts = await User.find(
-      { role: "marketing" },
-      { username: 1, email: 1, verified: 1, role: 1 }
+    const accounts = await User.find(
+      { role: { $in: ["marketing", "keuangan"] } }, // Mengambil role marketing dan keuangan
+      { username: 1, email: 1, verified: 1, role: 1 } // Menampilkan field yang diinginkan
     );
-    res.status(200).json({ message: "success", data: marketingAccounts });
+    res.status(200).json({ message: "success", data: accounts });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error fetching marketing accounts", error });
+    res.status(500).json({
+      message: "Error fetching marketing and finance accounts",
+      error,
+    });
   }
 });
 router.put("/users/:id", async (req, res) => {
@@ -771,8 +814,8 @@ router.put("/users/unverify/:id", async (req, res) => {
  * @access Private
  */
 router.post("/users/register", (req, res) => {
-  const { username, email, password } = req.body;
-  User.create({ username, email, password })
+  const { username, email, password, role } = req.body;
+  User.create({ username, email, password, role })
     .then(() => {
       return res.status(200).json({ message: "success" });
     })

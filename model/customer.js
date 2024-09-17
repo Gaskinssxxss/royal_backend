@@ -27,8 +27,14 @@ const customer = new Schema({
     enum: [true, false],
     default: false,
   },
+  status_pembayaran: {
+    type: Boolean,
+    enum: [true, false],
+    default: false,
+  },
   type_pembayaran: {
     type: String,
+    enum: ["kpr", "cash"],
     required: true,
   },
   tanggalBooking: {

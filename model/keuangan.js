@@ -11,27 +11,64 @@ const keuangan = new Schema({
     type: String,
     required: true,
   },
+  status_dp: {
+    type: Boolean,
+    enum: [true, false],
+    default: false,
+  },
+  perhitungan_harga_rumah: [
+    {
+      harga_rumah: {
+        type: Number,
+        required: true,
+      },
+      kelebihan_tanah: {
+        type: Number,
+        required: true,
+      },
+      harga_lokasi: {
+        type: Number,
+        required: true,
+      },
+      biaya_proses: {
+        type: Number,
+        required: true,
+      },
+      discount: {
+        type: Number,
+        required: false,
+      },
+      total_acc_bank: {
+        type: Number,
+        required: false,
+      },
+      status_perhitungan: {
+        type: Boolean,
+        default: false,
+      },
+      tgl_perhitungan: {
+        type: Date,
+        default: Date.now(),
+      },
+    },
+  ],
   harga_rumah: [
     {
-      harga: {
-        type: Number,
-        required: true,
-      },
-      bunga: {
-        type: Number,
-        required: true,
-      },
-      cashBack: {
+      total: {
         type: Number,
         required: false,
       },
       dp: {
         type: Number,
-        required: true,
+        required: false,
       },
-      jangka_waktu: {
+      total_akhir: {
+        type: Number,
+        required: false,
+      },
+      tgl_kalkulasi: {
         type: Date,
-        required: true,
+        default: Date.now(),
       },
     },
   ],
@@ -44,6 +81,10 @@ const keuangan = new Schema({
       saldo: {
         type: Number,
         required: false,
+      },
+      status_kredit: {
+        type: Boolean,
+        default: false,
       },
     },
   ],

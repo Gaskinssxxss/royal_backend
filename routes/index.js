@@ -11,6 +11,7 @@ const { requireLogin } = require("../middleware/authentication");
 const multer = require("multer");
 const crypto = require("crypto");
 const bcrypt = require("bcrypt");
+const cron = require("node-cron");
 const router = Router();
 
 const createJwt = (payload) => {
@@ -93,6 +94,15 @@ router.post("/chat/:visitorID/close", async (req, res) => {
   }
 });
 
+router.get("/keuangan/status-dp", async (req, res) => {
+  try {
+    const result = await Keuangan.find({}, { id_customer: 1, status_dp: 1 });
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ message: "Error retrieving data", error });
+  }
+});
+
 router.post("/keuangan", async (req, res) => {
   try {
     const newKeuangan = new Keuangan(req.body);
@@ -164,6 +174,7 @@ router.get("/keuangan/customer/:id", async (req, res) => {
 
 router.put("/keuangan/:id", async (req, res) => {
   try {
+    console.log(req.params.id);
     const updatedKeuangan = await Keuangan.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -173,6 +184,7 @@ router.put("/keuangan/:id", async (req, res) => {
       }
     );
     if (!updatedKeuangan) {
+      console.log(req.params.id);
       return res.status(404).json({ message: "Keuangan record not found" });
     }
     res.status(200).json({
@@ -398,7 +410,6 @@ router.post(
   }
 );
 
-// PUT /customer/edit/:id
 router.put(
   "/customer/edit/:id",
   upload.fields([
@@ -496,6 +507,56 @@ router.put("/verifikasi/:id", async (req, res) => {
   }
 });
 
+router.put("/status/:id", async (req, res) => {
+  try {
+    console.log(req.params.id);
+    const updatedCustomer = await Customer.findByIdAndUpdate(
+      req.params.id,
+      { status_pembayaran: true },
+      { new: true }
+    );
+
+    if (!updatedCustomer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    res.status(200).json({
+      message: "Customer verification updated successfully",
+      customer: updatedCustomer,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error updating customer verification",
+      error: error.message,
+    });
+  }
+});
+
+const updateHouseStatusAutomatically = async () => {
+  try {
+    const oneDayAgo = new Date(Date.now() - 2 * 60 * 1000);
+    const houses = await House.find({
+      status_rumah: "terbooking",
+      updatedAt: { $lt: oneDayAgo },
+    });
+
+    for (let house of houses) {
+      house.status_rumah = "deterjual";
+      await house.save();
+      console.log(
+        `Status rumah dengan id ${house._id} diperbarui menjadi 'deterjual'`
+      );
+    }
+  } catch (error) {
+    console.error("Error memperbarui status rumah secara otomatis:", error);
+  }
+};
+
+cron.schedule("*/2 * * * *", () => {
+  console.log("Memeriksa status rumah setiap 2 menit...");
+  updateHouseStatusAutomatically();
+});
+
 router.put("/verifikasi/batal/:id", async (req, res) => {
   try {
     const updatedCustomer = await Customer.findByIdAndUpdate(
@@ -519,8 +580,6 @@ router.put("/verifikasi/batal/:id", async (req, res) => {
     });
   }
 });
-
-// House Update
 
 router.put("/update-house-status/:id", async (req, res) => {
   try {
@@ -549,10 +608,9 @@ router.put("/update-house-status/:id", async (req, res) => {
 
 router.put("/deupdate-house-status/:id", async (req, res) => {
   try {
-    const kondisi = req.body.status_rumah;
     const updatedHouse = await House.findByIdAndUpdate(
       req.params.id,
-      { status_rumah: kondisi },
+      { status_rumah: "deterjual" },
       { new: true }
     );
 
@@ -718,8 +776,8 @@ router.delete("/blok/delete/:id", (req, res) => {
 
 router.get("/blocks-and-houses", async (req, res) => {
   try {
-    const blocks = await Blok.find(); // Fetch all blocks
-    const houses = await House.find().populate("id_blok"); // Fetch all houses and populate blok data
+    const blocks = await Blok.find();
+    const houses = await House.find().populate("id_blok");
 
     res.json({
       blocks,
@@ -733,8 +791,8 @@ router.get("/blocks-and-houses", async (req, res) => {
 router.get("/users/marketing", async (req, res) => {
   try {
     const accounts = await User.find(
-      { role: { $in: ["marketing", "keuangan"] } }, // Mengambil role marketing dan keuangan
-      { username: 1, email: 1, verified: 1, role: 1 } // Menampilkan field yang diinginkan
+      { role: { $in: ["marketing", "keuangan"] } },
+      { username: 1, email: 1, verified: 1, role: 1 }
     );
     res.status(200).json({ message: "success", data: accounts });
   } catch (error) {
@@ -900,10 +958,20 @@ router.get("/user/history", requireLogin, async (req, res) => {
 
     const customers = await Customer.find({ id_user: id_user })
       .populate("id_blok", "blokname")
-      .populate("id_rumah", "no_rumah type_rumah")
-      .populate("id_user", "username");
+      .populate("id_rumah", "no_rumah type_rumah status_rumah")
+      .populate("id_user", "username")
+      .lean();
 
-    if (customers.length === 0) {
+    const filteredCustomers = customers.filter((customer) => {
+      const statusRumah = customer.id_rumah.status_rumah;
+      return (
+        statusRumah === "terjual" ||
+        statusRumah === "cash" ||
+        statusRumah === "kpr"
+      );
+    });
+
+    if (filteredCustomers.length === 0) {
       return res.status(404).json({
         message: "No history found for this user",
       });
@@ -911,7 +979,7 @@ router.get("/user/history", requireLogin, async (req, res) => {
 
     res.status(200).json({
       message: "User history retrieved successfully",
-      data: customers,
+      data: filteredCustomers,
     });
   } catch (error) {
     res.status(500).json({
@@ -920,5 +988,34 @@ router.get("/user/history", requireLogin, async (req, res) => {
     });
   }
 });
+
+// router.get("/user/history", requireLogin, async (req, res) => {
+//   try {
+//     const token = req.cookies.auth;
+//     const decodedToken = jwt.verify(token, SECRET);
+//     const id_user = decodedToken.payload;
+
+//     const customers = await Customer.find({ id_user: id_user })
+//       .populate("id_blok", "blokname")
+//       .populate("id_rumah", "no_rumah type_rumah status_rumah")
+//       .populate("id_user", "username");
+
+//     if (customers.length === 0) {
+//       return res.status(404).json({
+//         message: "No history found for this user",
+//       });
+//     }
+
+//     res.status(200).json({
+//       message: "User history retrieved successfully",
+//       data: customers,
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       message: "Error retrieving user history",
+//       error: error.message,
+//     });
+//   }
+// });
 
 module.exports = router;

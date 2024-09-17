@@ -12,7 +12,7 @@ const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http, {
   cors: {
-    origin: "http://192.168.1.4:8080",
+    origin: "http://192.168.1.10:8080",
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -84,7 +84,7 @@ io.on("connection", (socket) => {
 if (process.env.NODE_ENV === "development") {
   app.use(
     cors({
-      origin: "http://192.168.1.4:8080",
+      origin: "http://192.168.1.10:8080",
       credentials: true,
     })
   );

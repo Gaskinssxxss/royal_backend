@@ -20,15 +20,15 @@
   "author": "Petr Chatrný",
   "dependencies": {
     "bcrypt": "^5.0.1",
-    "body-parser": "^1.20.0",
+    "body-parser": "^1.20.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
     "csv-parser": "^3.0.0",
     "dotenv": "^16.0.1",
-    "express": "^4.18.1",
+    "express": "^4.20.0",
     "fs": "^0.0.1-security",
-    "jsonwebtoken": "^8.5.1",
+    "jsonwebtoken": "^9.0.0",
     "mongoose": "^6.4.0",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
@@ -38,7 +38,7 @@
   },
   "devDependencies": {
     "concurrently": "^7.2.2",
-    "nodemon": "^2.0.18"
+    "nodemon": "^2.0.22"
   },
   "license": "ISC"
 }

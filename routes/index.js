@@ -5,6 +5,7 @@ const House = require("../model/house");
 const Customer = require("../model/customer");
 const Keuangan = require("../model/keuangan");
 const Chat = require("../model/chat");
+const Notification = require("../model/notification");
 const jwt = require("jsonwebtoken");
 const { SECRET, MAX_AGE } = require("../consts");
 const { requireLogin } = require("../middleware/authentication");
@@ -12,6 +13,7 @@ const multer = require("multer");
 const crypto = require("crypto");
 const bcrypt = require("bcrypt");
 const cron = require("node-cron");
+const nodemailer = require("nodemailer");
 const router = Router();
 
 const createJwt = (payload) => {
@@ -44,6 +46,125 @@ const encryptData = (data) => {
 };
 
 const upload = multer({ storage: storage });
+
+// Create a new notification
+router.post("/notification", async (req, res) => {
+  try {
+    const notificationData = {
+      user: req.body.user,
+      content: req.body.content,
+      role_receivers: req.body.role_receivers,
+    };
+    if (req.body.related_user) {
+      notificationData.related_user = req.body.related_user;
+    }
+    const notification = new Notification(notificationData);
+    await notification.save();
+    res.status(201).json(notification);
+  } catch (error) {
+    res.status(500).json({ message: "Error creating notification", error });
+  }
+});
+
+router.get("/notification", async (req, res) => {
+  try {
+    const notifications = await Notification.find().populate("user");
+    res.status(200).json(notifications);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching notifications", error });
+  }
+});
+
+// Get notifications by user ID
+// Endpoint untuk mendapatkan notifikasi berdasarkan role user yang login
+router.get("/notification/role/:userId", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+
+    // Temukan notifikasi yang ditujukan ke role user yang login
+    const notifications = await Notification.find({
+      role_receivers: user.role,
+    }).sort({ createdAt: -1 });
+
+    res.json(notifications);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching notifications", error });
+  }
+});
+
+router.get("/notification/marketing/:userId", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    // Temukan notifikasi yang ditujukan ke role user yang login
+    const notifications = await Notification.find({
+      related_user: user._id,
+    }).sort({ createdAt: -1 });
+
+    res.json(notifications);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching notifications", error });
+  }
+});
+
+router.get("/notification/keuangan/:userId", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+
+    // Temukan notifikasi yang ditujukan ke role user yang login
+    const notifications = await Notification.find({
+      role_receivers: user.role,
+    }).sort({ createdAt: -1 });
+
+    res.json(notifications);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching notifications", error });
+  }
+});
+
+router.get("/notification/direktur/:userId", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+
+    // Temukan notifikasi yang ditujukan ke role user yang login
+    const notifications = await Notification.find({
+      role_receivers: user.role,
+    }).sort({ createdAt: -1 });
+
+    res.json(notifications);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching notifications", error });
+  }
+});
+
+// Update a notification by ID
+router.put("/notification/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updatedNotification = await Notification.findByIdAndUpdate(
+      id,
+      req.body,
+      { new: true }
+    );
+    if (!updatedNotification)
+      return res.status(404).json({ message: "Notification not found" });
+    res.status(200).json(updatedNotification);
+  } catch (error) {
+    res.status(500).json({ message: "Error updating notification", error });
+  }
+});
+
+// Delete a notification by ID
+router.delete("/notification/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deletedNotification = await Notification.findByIdAndDelete(id);
+    if (!deletedNotification)
+      return res.status(404).json({ message: "Notification not found" });
+    res.status(200).json({ message: "Notification deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting notification", error });
+  }
+});
 
 router.get("/chat/:visitorID", async (req, res) => {
   try {
@@ -94,12 +215,216 @@ router.post("/chat/:visitorID/close", async (req, res) => {
   }
 });
 
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 465,
+  auth: {
+    user: "siemprecomandante666@gmail.com",
+    pass: "izwr vhzu dvqh fjuo",
+  },
+});
+
+async function sendOtpEmailToDirector(id, directorEmail, otp) {
+  const mailOptions = {
+    from: "orangd292@gmail.com",
+    to: directorEmail,
+    subject: "Kode OTP Verifikasi Transaksi",
+    text: `Kode OTP Anda untuk dokumen ${id} verifikasi transaksi adalah: ${otp}`,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("OTP berhasil dikirim ke email direktur");
+  } catch (error) {
+    console.error("Gagal mengirim OTP ke email direktur:", error);
+  }
+}
+
+function generateOTP() {
+  return crypto.randomInt(100000, 999999).toString();
+}
+
+router.post("/keuangan/:id/send-otp", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const otp = generateOTP();
+
+    const keuangan = await Keuangan.findOneAndUpdate(
+      { _id: id, "kredit.status_saldo": "pending" },
+      { $set: { "kredit.$.otp": otp } },
+      { new: true }
+    );
+
+    if (!keuangan) {
+      return res.status(404).json({
+        message: "Data keuangan tidak ditemukan atau sudah diverifikasi",
+      });
+    }
+
+    const directorEmail = "pollacheialnetwork@gmail.com";
+
+    await sendOtpEmailToDirector(keuangan.nomor_pembayaran, directorEmail, otp);
+
+    res.status(200).json({
+      message: "OTP berhasil dikirim",
+      otp: otp,
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Gagal mengirim OTP", error: error.message });
+  }
+});
+
+router.post("/keuangan/:id/verify-otp", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { otp } = req.body;
+
+    const keuangan = await Keuangan.findOneAndUpdate(
+      { _id: id, "kredit.otp": otp },
+      {
+        $set: { "kredit.$.status_saldo": "success" },
+        $unset: { "kredit.$.otp": "" },
+      },
+      { new: true }
+    );
+
+    if (!keuangan) {
+      return res.status(400).json({
+        message: "OTP tidak valid atau data keuangan tidak ditemukan",
+      });
+    }
+
+    res.status(200).json({
+      message: "OTP berhasil diverifikasi dan status saldo telah diperbarui",
+      data: keuangan,
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Gagal memverifikasi OTP", error: error.message });
+  }
+});
+
+router.get("/keuangan/transaksiDirektur", async (req, res) => {
+  try {
+    const transaksiPending = await Keuangan.find({
+      "kredit.status_saldo": "pending",
+    }).populate({
+      path: "id_customer",
+      model: "Customer",
+      populate: [
+        {
+          path: "id_rumah",
+          model: "House",
+        },
+        {
+          path: "id_blok",
+          model: "Blok",
+        },
+        {
+          path: "id_user",
+          model: "User",
+        },
+      ],
+    });
+
+    if (transaksiPending.length > 0) {
+      res.status(200).json({
+        message: "Transaksi yang membutuhkan validasi berhasil diambil.",
+        data: transaksiPending,
+      });
+    } else {
+      res.status(404).json({
+        message: "Tidak ada transaksi yang membutuhkan validasi.",
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      message: "Gagal mengambil data transaksi.",
+      error: error.message,
+    });
+  }
+});
+
+router.get("/keuangan/transaksiDirektur/success", async (req, res) => {
+  try {
+    const transaksiPending = await Keuangan.find({
+      "kredit.status_saldo": "success",
+    }).populate({
+      path: "id_customer",
+      model: "Customer",
+      populate: [
+        {
+          path: "id_rumah",
+          model: "House",
+        },
+        {
+          path: "id_blok",
+          model: "Blok",
+        },
+        {
+          path: "id_user",
+          model: "User",
+        },
+      ],
+    });
+
+    if (transaksiPending.length > 0) {
+      res.status(200).json({
+        message: "Transaksi yang membutuhkan validasi berhasil diambil.",
+        data: transaksiPending,
+      });
+    } else {
+      res.status(404).json({
+        message: "Tidak ada transaksi yang membutuhkan validasi.",
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      message: "Gagal mengambil data transaksi.",
+      error: error.message,
+    });
+  }
+});
+
 router.get("/keuangan/status-dp", async (req, res) => {
   try {
     const result = await Keuangan.find({}, { id_customer: 1, status_dp: 1 });
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ message: "Error retrieving data", error });
+  }
+});
+
+router.get("/keuangan", async (req, res) => {
+  try {
+    const keuanganData = await Keuangan.find().populate({
+      path: "id_customer",
+      model: "Customer",
+      populate: [
+        {
+          path: "id_rumah",
+          model: "House",
+        },
+        {
+          path: "id_blok",
+          model: "Blok",
+        },
+      ],
+    });
+
+    res.status(200).json({
+      message:
+        "Data keuangan beserta customer, rumah, dan blok berhasil diambil",
+      data: keuanganData,
+    });
+  } catch (error) {
+    res.status(400).json({
+      message: "Error dalam mengambil data keuangan",
+      error: error.message,
+    });
   }
 });
 
@@ -172,7 +497,51 @@ router.get("/keuangan/customer/:id", async (req, res) => {
   }
 });
 
-router.put("/keuangan/:id", async (req, res) => {
+router.put(
+  "/keuangan/:id",
+  upload.single("bukti_transaksi"),
+  async (req, res) => {
+    try {
+      const { tanggal, saldo } = req.body;
+      const kredit = {
+        tanggal: tanggal,
+        saldo: saldo,
+        status_kredit: true,
+      };
+
+      if (req.file) {
+        kredit.bukti_transaksi = req.file.path;
+      }
+
+      const updatedKeuangan = await Keuangan.findByIdAndUpdate(
+        req.params.id,
+        {
+          $push: { kredit: kredit },
+        },
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
+
+      if (!updatedKeuangan) {
+        return res.status(404).json({ message: "Keuangan record not found" });
+      }
+
+      res.status(200).json({
+        message: "Keuangan record updated successfully",
+        data: updatedKeuangan,
+      });
+    } catch (error) {
+      res.status(400).json({
+        message: "Error updating keuangan record",
+        error: error.message,
+      });
+    }
+  }
+);
+
+router.put("/keuangan/pembayaran/:id", async (req, res) => {
   try {
     console.log(req.params.id);
     const updatedKeuangan = await Keuangan.findByIdAndUpdate(
@@ -183,10 +552,12 @@ router.put("/keuangan/:id", async (req, res) => {
         runValidators: true,
       }
     );
+
     if (!updatedKeuangan) {
       console.log(req.params.id);
       return res.status(404).json({ message: "Keuangan record not found" });
     }
+
     res.status(200).json({
       message: "Keuangan record updated successfully",
       data: updatedKeuangan,
@@ -214,6 +585,57 @@ router.delete("/keuangan/:id", async (req, res) => {
   }
 });
 
+router.get("/search-keuangan", async (req, res) => {
+  const { blokname } = req.query;
+
+  if (!blokname) {
+    return res.status(400).json({ message: "blokname is required" });
+  }
+
+  try {
+    const blok = await Blok.findOne({ blokname });
+
+    if (!blok) {
+      return res.status(404).json({ message: "Blok not found" });
+    }
+
+    const customers = await Customer.find({ id_blok: blok._id });
+
+    if (customers.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "No customers found for this blok" });
+    }
+
+    const customerIds = customers.map((customer) => customer._id);
+
+    const keuanganData = await Keuangan.find({
+      id_customer: { $in: customerIds },
+    }).populate({
+      path: "id_customer",
+      populate: [
+        { path: "id_rumah", select: "no_rumah type_rumah id_rumah" },
+        { path: "id_blok", select: "blokname" },
+        { path: "id_user", select: "username" },
+      ],
+    });
+
+    if (keuanganData.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "No keuangan data found for this blok" });
+    }
+
+    res
+      .status(200)
+      .json({ message: "Keuangan data found", data: keuanganData });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error searching keuangan", error: error.message });
+  }
+});
+
 router.get("/search-customer", async (req, res) => {
   const { blokname } = req.query;
 
@@ -230,7 +652,8 @@ router.get("/search-customer", async (req, res) => {
 
     const customers = await Customer.find({ id_blok: blok._id })
       .populate("id_blok", "blokname")
-      .populate("id_rumah", "no_rumah type_rumah");
+      .populate("id_rumah", "no_rumah type_rumah id_rumah")
+      .populate("id_user", "username");
 
     if (customers.length === 0) {
       return res
@@ -536,7 +959,7 @@ const updateHouseStatusAutomatically = async () => {
   try {
     const oneDayAgo = new Date(Date.now() - 2 * 60 * 1000);
     const houses = await House.find({
-      status_rumah: "terbooking",
+      status_rumah: "terbooking_sementara",
       updatedAt: { $lt: oneDayAgo },
     });
 
@@ -610,7 +1033,7 @@ router.put("/deupdate-house-status/:id", async (req, res) => {
   try {
     const updatedHouse = await House.findByIdAndUpdate(
       req.params.id,
-      { status_rumah: "deterjual" },
+      { status_rumah: "terbooking" },
       { new: true }
     );
 
@@ -716,8 +1139,36 @@ router.get("/house", (req, res) => {
     .catch((error) => res.status(400).json({ message: "error", error }));
 });
 
+router.get("/house/user", (req, res) => {
+  Customer.find()
+    .populate({
+      path: "id_rumah", // populate house
+      model: "House",
+    })
+    .populate({
+      path: "id_user", // populate user
+      model: "User",
+    })
+    .then((customers) => {
+      res.status(200).json({ message: "success", data: customers });
+    })
+    .catch((error) => res.status(400).json({ message: "error", error }));
+});
+
 router.get("/house/:id_rumah", (req, res) => {
   House.findOne({ id_rumah: req.params.id_rumah })
+    .then((house) => {
+      if (!house) {
+        return res.status(404).json({ error: "House not found" });
+      }
+      res.json({ data: house });
+    })
+    .catch((error) => res.status(400).json({ error }));
+});
+
+router.get("/house/id/:_id", (req, res) => {
+  House.findById({ _id: req.params._id })
+    .populate("id_blok", "blokname")
     .then((house) => {
       if (!house) {
         return res.status(404).json({ error: "House not found" });
@@ -791,7 +1242,7 @@ router.get("/blocks-and-houses", async (req, res) => {
 router.get("/users/marketing", async (req, res) => {
   try {
     const accounts = await User.find(
-      { role: { $in: ["marketing", "keuangan"] } },
+      { role: { $in: ["marketing", "keuangan", "direktur"] } },
       { username: 1, email: 1, verified: 1, role: 1 }
     );
     res.status(200).json({ message: "success", data: accounts });
@@ -836,6 +1287,7 @@ router.delete("/users/:id", async (req, res) => {
     res.status(500).json({ message: "Error deleting user", error });
   }
 });
+
 router.put("/users/verify/:id", async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(
@@ -851,6 +1303,7 @@ router.put("/users/verify/:id", async (req, res) => {
     res.status(500).json({ message: "Error verifying user", error });
   }
 });
+
 router.put("/users/unverify/:id", async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(

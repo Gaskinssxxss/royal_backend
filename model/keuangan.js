@@ -86,6 +86,19 @@ const keuangan = new Schema({
         type: Boolean,
         default: false,
       },
+      bukti_transaksi: {
+        type: String,
+        required: false,
+      },
+      status_saldo: {
+        type: String,
+        enum: ["pending", "success", "failed"],
+        default: "pending",
+      },
+      otp: {
+        type: String,
+        required: false,
+      },
     },
   ],
 });

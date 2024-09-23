@@ -22,7 +22,14 @@ const house = new Schema(
     },
     status_rumah: {
       type: String,
-      enum: ["kpr", "cash", "terbooking", "deterjual", "terjual"],
+      enum: [
+        "kpr",
+        "cash",
+        "terbooking",
+        "terbooking_sementara",
+        "deterjual",
+        "terjual",
+      ],
       required: true,
       default: "deterjual",
     },
